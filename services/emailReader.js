@@ -10,10 +10,9 @@ const imapConfig = {
     user: "ninaegreja@gmail.com",
     password: "cjanecctdyqgdric",
     host: "imap.gmail.com",
-      family: 4,
     port: 993,
     tls: true,
-    tlsOptions: { rejectUnauthorized: false },
+    tlsOptions: { rejectUnauthorized: false, family: 4 },
     authTimeout: 10000,
   },
 };
@@ -37,11 +36,16 @@ Assine sempre como: Nina Egreja | Assistente Pessoal | ninaegreja@gmail.com`,
 const replied = new Set();
 
 export async function checkAndReplyEmails() {
+  // Só roda se não estiver no Railway
+  if (process.env.RAILWAY_ENVIRONMENT) {
+    console.log("📧 Email watcher desativado no Railway (limitação de rede)");
+    return;
+  }
+
   let connection;
   try {
     connection = await Imap.connect(imapConfig);
     await connection.openBox("INBOX");
-
     const messages = await connection.search(["UNSEEN"], {
       bodies: [""],
       markSeen: false,
@@ -52,7 +56,6 @@ export async function checkAndReplyEmails() {
     for (const msg of messages) {
       const all = msg.parts.find(p => p.which === "");
       if (!all) continue;
-
       const parsed = await simpleParser(all.body);
       const from = parsed.from?.text || "";
       const subject = parsed.subject || "(sem assunto)";
@@ -64,17 +67,14 @@ export async function checkAndReplyEmails() {
 
       console.log(`📧 Respondendo: ${subject} — de ${from}`);
       const reply = await generateReply(from, subject, body);
-
       await sendEmail({
         to: parsed.from?.value[0]?.address,
         subject: `Re: ${subject}`,
         body: reply,
       });
-
       replied.add(msgId);
       console.log(`✅ Respondido!`);
     }
-
     connection.end();
   } catch (err) {
     console.error("Erro:", err.message);
@@ -83,6 +83,10 @@ export async function checkAndReplyEmails() {
 }
 
 export function startEmailWatcher(intervalMinutes = 2) {
+  if (process.env.RAILWAY_ENVIRONMENT) {
+    console.log("📧 Email watcher desativado no Railway");
+    return;
+  }
   console.log(`👁 Nina monitorando emails a cada ${intervalMinutes} min...`);
   checkAndReplyEmails();
   setInterval(checkAndReplyEmails, intervalMinutes * 60 * 1000);
