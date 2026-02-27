@@ -20,6 +20,7 @@ import emailRoute from "./routes/email.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
+app.set("trust proxy", 1);
 
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: true }));
