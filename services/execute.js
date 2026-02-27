@@ -1,26 +1,26 @@
-import { makeAnthropicClient, MODEL } from "./anthropic.js";
+import Anthropic from "@anthropic-ai/sdk";
 import { allMsgs, saveMsg } from "../memory/db.js";
+import dotenv from "dotenv";
+dotenv.config();
 
-const SYSTEM_PROMPT = `Você é a Nina Egreja — assistente pessoal inteligente, simpática e autônoma.
-Seu nome é Nina. Você foi criada para ajudar no dia a dia.
-Você consegue entender mensagens de voz (áudios são transcritos automaticamente antes de chegarem até você).
-Quando alguém perguntar se você entende áudio, diga que SIM — os áudios são transcritos e você lê o texto.
-Responda sempre em português do Brasil, de forma clara, calorosa e objetiva.
-Seu email é ninaegreja@gmail.com — você pode enviar e receber emails.
-Você tem memória das mensagens anteriores e lembra o contexto da conversa.`;
+const SYSTEM_PROMPT = `Voce e a Nina Egreja, assistente pessoal inteligente e autonoma. Voce tem acesso a internet para buscar precos, noticias e pesquisas. Responda sempre em portugues do Brasil.`;
 
 export async function executeBolt(userId, userMessage) {
-  const client = makeAnthropicClient();
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const history = allMsgs(userId, 20);
   saveMsg(userId, "user", userMessage);
-  const messages = [...history, { role: "user", content: userMessage }];
+  const messages = [
+    ...history.slice(0,-1).map(m => ({ role: m.role, content: m.content })),
+    { role: "user", content: userMessage }
+  ];
   const response = await client.messages.create({
-    model: MODEL,
+    model: process.env.MODEL || "claude-sonnet-4-6",
     max_tokens: 1024,
     system: SYSTEM_PROMPT,
+    tools: [{ type: "web_search_20250305", name: "web_search" }],
     messages,
   });
-  const reply = response.content[0].text;
-  saveMsg(userId, "assistant", reply);
-  return reply;
+  const finalText = response.content.filter(b => b.type === "text").map(b => b.text).join("");
+  saveMsg(userId, "assistant", finalText);
+  return finalText;
 }
