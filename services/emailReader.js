@@ -10,6 +10,7 @@ const imapConfig = {
     user: "ninaegreja@gmail.com",
     password: "cjanecctdyqgdric",
     host: "imap.gmail.com",
+      family: 4,
     port: 993,
     tls: true,
     tlsOptions: { rejectUnauthorized: false },
