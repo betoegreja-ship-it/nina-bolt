@@ -1,39 +1,32 @@
-// routes/whatsapp.js — Webhook Twilio WhatsApp
 import { Router } from "express";
 import { executeBolt } from "../services/execute.js";
+import { transcribeAudio } from "../services/whisper.js";
 
 const router = Router();
 
-// Twilio envia como form-urlencoded
 router.post("/", async (req, res) => {
-  const userMessage = req.body.Body?.trim();
-  const from = req.body.From; // ex: "whatsapp:+5511999999999"
-
-  if (!userMessage || !from) {
-    return res.status(400).send("<Response></Response>");
-  }
-
-  // Usa o número como userId (memória separada por contato)
+  console.log("WA:", JSON.stringify(req.body));
+  const from = req.body.From;
+  const mediaUrl = req.body.MediaUrl0;
+  const mediaType = req.body.MediaContentType0 || "";
+  let userMessage = req.body.Body?.trim();
+  if (!from) return res.status(400).send("<Response></Response>");
   const userId = from.replace("whatsapp:", "");
-
-  let reply = "Desculpe, ocorreu um erro.";
-  try {
-    reply = await executeBolt(userId, userMessage);
-  } catch (err) {
-    console.error("Erro WhatsApp:", err);
+  if (mediaUrl && mediaType.includes("audio")) {
+    console.log("Audio:", mediaUrl);
+    try {
+      userMessage = await transcribeAudio(mediaUrl);
+      console.log("Transcrito:", userMessage);
+    } catch (err) {
+      console.error("Erro audio:", err.message);
+      userMessage = "Recebi um audio mas nao consegui entender.";
+    }
   }
-
-  // Twilio espera resposta TwiML
+  if (!userMessage) return res.send("<Response></Response>");
+  let reply = "Erro.";
+  try { reply = await executeBolt(userId, userMessage); } catch (err) { console.error(err.message); }
   res.set("Content-Type", "text/xml");
-  res.send(`<Response><Message>${escapeXml(reply)}</Message></Response>`);
+  res.send("<Response><Message>" + reply.replace(/&/g,"&amp;") + "</Message></Response>");
 });
-
-function escapeXml(text) {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
 
 export default router;
