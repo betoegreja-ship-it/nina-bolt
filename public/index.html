@@ -210,7 +210,7 @@
   <label>API Key:</label>
   <input type="text" id="api-key" placeholder="bolt_..." />
   <label>User ID:</label>
-  <input type="text" id="user-id" value="web_user" style="width:120px" />
+  <input type="text" id="user-id" id="user-id" value="web_user" style="width:120px" />
   <label>Modo:</label>
   <select id="mode">
     <option value="normal">Normal</option>
@@ -239,6 +239,12 @@
   const modeEl = document.getElementById("mode");
   const modeIndicator = document.getElementById("mode-indicator");
   const userLabel = document.getElementById("user-label");
+
+  // Carrega key e user salvas
+  const savedKey = localStorage.getItem("nina_api_key");
+  const savedUser = localStorage.getItem("nina_user_id");
+  if (savedKey) document.getElementById("api-key").value = savedKey;
+  if (savedUser) document.getElementById("user-id").value = savedUser;
 
   modeEl.addEventListener("change", () => {
     const isMulti = modeEl.value === "multi";
@@ -297,6 +303,9 @@
   async function sendMessage() {
     const text = inputEl.value.trim();
     const apiKey = getApiKey();
+    if (apiKey) localStorage.setItem("nina_api_key", apiKey);
+    localStorage.setItem("nina_user_id", getUserId());
+    if (apiKey) localStorage.setItem("nina_api_key", apiKey);
     if (!text) return;
     if (!apiKey) { alert("Coloque sua API Key no campo acima!"); return; }
 
@@ -344,6 +353,7 @@
 
   async function clearMemory() {
     const apiKey = getApiKey();
+    if (apiKey) localStorage.setItem("nina_api_key", apiKey);
     if (!apiKey) { alert("Coloque sua API Key!"); return; }
 
     await fetch("/memory", {
