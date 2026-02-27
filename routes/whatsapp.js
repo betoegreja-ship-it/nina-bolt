@@ -3,13 +3,19 @@ import { executeBolt } from "../services/execute.js";
 import { transcribeAudio } from "../services/whisper.js";
 import { textToSpeech } from "../services/tts.js";
 import twilio from "twilio";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 dotenv.config();
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const audioDir = path.join(__dirname, "../public/audio");
+if (!fs.existsSync(audioDir)) fs.mkdirSync(audioDir, { recursive: true });
 
 const router = Router();
 
 router.post("/", async (req, res) => {
-  console.log("WA:", JSON.stringify(req.body));
   const from = req.body.From;
   const mediaUrl = req.body.MediaUrl0;
   const mediaType = req.body.MediaContentType0 || "";
@@ -20,7 +26,6 @@ router.post("/", async (req, res) => {
   const userId = from.replace("whatsapp:", "");
 
   if (isAudio) {
-    console.log("Audio:", mediaUrl);
     try {
       userMessage = await transcribeAudio(mediaUrl);
       console.log("Transcrito:", userMessage);
@@ -35,19 +40,28 @@ router.post("/", async (req, res) => {
   let reply = "Erro.";
   try { reply = await executeBolt(userId, userMessage); } catch (err) { console.error(err.message); }
 
-  // Se veio audio, responde com audio
   if (isAudio) {
     try {
-      const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
       const audioBuffer = await textToSpeech(reply);
-      const base64Audio = audioBuffer.toString("base64");
-      const mediaDataUrl = "data:audio/mpeg;base64," + base64Audio;
+      const filename = "nina_" + Date.now() + ".mp3";
+      const filepath = path.join(audioDir, filename);
+      fs.writeFileSync(filepath, audioBuffer);
 
+      const publicUrl = process.env.RAILWAY_PUBLIC_DOMAIN
+        ? "https://" + process.env.RAILWAY_PUBLIC_DOMAIN + "/audio/" + filename
+        : "http://localhost:3000/audio/" + filename;
+
+      console.log("Audio URL:", publicUrl);
+
+      const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
       await client.messages.create({
         from: "whatsapp:+14155238886",
         to: from,
-        mediaUrl: [mediaDataUrl],
+        mediaUrl: [publicUrl],
       });
+
+      // Limpa arquivo após 1 minuto
+      setTimeout(() => { try { fs.unlinkSync(filepath); } catch(_) {} }, 60000);
 
       return res.send("<Response></Response>");
     } catch (err) {
