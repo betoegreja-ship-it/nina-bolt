@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { allMsgs, saveMsg } from "../memory/db.js";
 import { browseWeb } from "./browser.js";
+import { searchFlights } from "./flights.js";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -48,9 +49,13 @@ export async function executeBolt(userId, userMessage) {
     const toolBlock = response.content.find(b => b.type === "tool_use");
     console.log("Browser task:", toolBlock.input.task);
 
-    let toolResult = "Erro ao acessar o site.";
+    let toolResult = "Erro.";
     try {
-      toolResult = await browseWeb(toolBlock.input.task, toolBlock.input.url);
+      if (toolBlock.name === "search_flights") {
+        toolResult = await searchFlights(toolBlock.input);
+      } else {
+        toolResult = await browseWeb(toolBlock.input.task, toolBlock.input.url);
+      }
     } catch (err) {
       toolResult = "Erro: " + err.message;
     }
