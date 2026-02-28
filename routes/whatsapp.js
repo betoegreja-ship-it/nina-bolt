@@ -20,7 +20,11 @@ router.post("/", async (req, res) => {
   const mediaUrl = req.body.MediaUrl0;
   const mediaType = req.body.MediaContentType0 || "";
   let userMessage = req.body.Body?.trim();
-  const isAudio = mediaUrl && mediaType.includes("audio");
+
+  // So considera audio se realmente veio arquivo de audio
+  const isAudio = !!(mediaUrl && mediaType.includes("audio"));
+
+  console.log("WA tipo:", isAudio ? "AUDIO" : "TEXTO", "| msg:", userMessage);
 
   if (!from) return res.status(400).send("<Response></Response>");
   const userId = from.replace("whatsapp:", "");
@@ -40,35 +44,24 @@ router.post("/", async (req, res) => {
   let reply = "Erro.";
   try { reply = await executeBolt(userId, userMessage); } catch (err) { console.error(err.message); }
 
+  // So responde com voz se recebeu audio
   if (isAudio) {
     try {
       const audioBuffer = await textToSpeech(reply);
       const filename = "nina_" + Date.now() + ".mp3";
       const filepath = path.join(audioDir, filename);
       fs.writeFileSync(filepath, audioBuffer);
-
-      const publicUrl = process.env.RAILWAY_PUBLIC_DOMAIN
-        ? "https://" + process.env.RAILWAY_PUBLIC_DOMAIN + "/audio/" + filename
-        : "http://localhost:3000/audio/" + filename;
-
-      console.log("Audio URL:", publicUrl);
-
+      const publicUrl = "https://" + process.env.RAILWAY_PUBLIC_DOMAIN + "/audio/" + filename;
       const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-      await client.messages.create({
-        from: "whatsapp:+14155238886",
-        to: from,
-        mediaUrl: [publicUrl],
-      });
-
-      // Limpa arquivo após 1 minuto
+      await client.messages.create({ from: "whatsapp:+14155238886", to: from, mediaUrl: [publicUrl] });
       setTimeout(() => { try { fs.unlinkSync(filepath); } catch(_) {} }, 60000);
-
       return res.send("<Response></Response>");
     } catch (err) {
       console.error("Erro TTS:", err.message);
     }
   }
 
+  // Texto responde com texto
   res.set("Content-Type", "text/xml");
   res.send("<Response><Message>" + reply.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;") + "</Message></Response>");
 });
