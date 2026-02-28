@@ -20,31 +20,16 @@ router.post("/", async (req, res) => {
   const mediaUrl = req.body.MediaUrl0;
   const mediaType = req.body.MediaContentType0 || "";
   let userMessage = req.body.Body?.trim();
-
-  // So considera audio se realmente veio arquivo de audio
   const isAudio = !!(mediaUrl && mediaType.includes("audio"));
-
-  console.log("WA tipo:", isAudio ? "AUDIO" : "TEXTO", "| msg:", userMessage);
-
   if (!from) return res.status(400).send("<Response></Response>");
   const userId = from.replace("whatsapp:", "");
-
   if (isAudio) {
-    try {
-      userMessage = await transcribeAudio(mediaUrl);
-      console.log("Transcrito:", userMessage);
-    } catch (err) {
-      console.error("Erro audio:", err.message);
-      userMessage = "Recebi um audio mas nao consegui entender.";
-    }
+    try { userMessage = await transcribeAudio(mediaUrl); }
+    catch (err) { userMessage = "Recebi um audio mas nao consegui entender."; }
   }
-
   if (!userMessage) return res.send("<Response></Response>");
-
   let reply = "Erro.";
   try { reply = await executeBolt(userId, userMessage); } catch (err) { console.error(err.message); }
-
-  // So responde com voz se recebeu audio
   if (isAudio) {
     try {
       const audioBuffer = await textToSpeech(reply);
@@ -56,12 +41,8 @@ router.post("/", async (req, res) => {
       await client.messages.create({ from: "whatsapp:+14155238886", to: from, mediaUrl: [publicUrl] });
       setTimeout(() => { try { fs.unlinkSync(filepath); } catch(_) {} }, 60000);
       return res.send("<Response></Response>");
-    } catch (err) {
-      console.error("Erro TTS:", err.message);
-    }
+    } catch (err) { console.error("Erro TTS:", err.message); }
   }
-
-  // Texto responde com texto
   res.set("Content-Type", "text/xml");
   res.send("<Response><Message>" + reply.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;") + "</Message></Response>");
 });
