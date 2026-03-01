@@ -57,6 +57,10 @@ export function clearAllMsgs() {
   db.prepare('DELETE FROM messages').run();
 }
 
+export function clearAllMsgs() {
+  db.prepare("DELETE FROM messages").run();
+}
+
 export function clearMsgs(userId) {
   db.prepare(`DELETE FROM messages WHERE user_id = ?`).run(userId);
 }
