@@ -40,3 +40,11 @@ router.get("/logs", adminOnly, (req, res) => {
 });
 
 export default router;
+
+import { clearAllMsgs } from '../memory/db.js';
+router.delete('/clear-all', (req, res) => {
+  const secret = req.headers['x-admin-secret'];
+  if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+  clearAllMsgs();
+  res.json({ ok: true, message: 'Todos os historicos limpos!' });
+});
