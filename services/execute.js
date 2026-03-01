@@ -104,6 +104,7 @@ export async function executeBolt(userId, userMessage) {
       const executedToolBlock = toolBlocks[0];
       const assistantContent = [executedToolBlock];
       
+      console.log('Tool result preview:', String(toolResults[0]?.content || '').slice(0, 200));
       const followUp = await client.messages.create({
         model: process.env.MODEL || "claude-sonnet-4-6",
         max_tokens: 1024,
@@ -117,6 +118,7 @@ export async function executeBolt(userId, userMessage) {
       });
 
       finalText = followUp.content.filter(b => b.type === "text").map(b => b.text).join("");
+      console.log("followUp stop_reason:", followUp.stop_reason, "finalText length:", finalText.length);
     } else {
       finalText = response.content.filter(b => b.type === "text").map(b => b.text).join("");
     }
