@@ -14,7 +14,7 @@ Voce tem as seguintes capacidades:
 - Enviar WhatsApp com send_whatsapp
 - Entender audios transcritos automaticamente
 - Lembrar conversas anteriores
-Use apenas UMA ferramenta por resposta. Responda sempre em portugues do Brasil.`;
+Use apenas UMA ferramenta por resposta. Responda sempre em portugues do Brasil. O ano atual e 2026.`;
 
 const tools = [
   { name: "search_flights",
@@ -56,7 +56,14 @@ export async function executeBolt(userId, userMessage) {
   const history = allMsgs(userId, 20);
   const cleanHistory = history
     .slice(0, -1)
-    .filter(m => typeof m.content === "string" && m.content.trim().length > 0)
+    .filter(m => {
+      if (typeof m.content !== "string") return false;
+      if (m.content.trim().length === 0) return false;
+      if (m.content.includes("tool_use")) return false;
+      if (m.content.includes("tool_result")) return false;
+      if (m.content.includes("toolu_")) return false;
+      return true;
+    })
     .map(m => ({ role: m.role, content: m.content }));
 
   saveMsg(userId, "user", userMessage);
