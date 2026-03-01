@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { allMsgs, saveMsg } from "../memory/db.js";
-import { browseWeb } from "./browser.js";
+import { searchWeb } from "./search.js";
 import { searchFlights } from "./flights.js";
 import { sendEmail } from "./email.js";
 import dotenv from "dotenv";
@@ -9,7 +9,7 @@ dotenv.config();
 const SYSTEM_PROMPT = `Voce e a Nina Egreja, assistente pessoal inteligente e autonoma.
 Voce tem as seguintes capacidades:
 - Buscar passagens aereas reais com search_flights (use codigos IATA)
-- Pesquisar na internet com browse_web
+- Pesquisar qualquer assunto na internet com browse_web (noticias, clima, precos, etc)
 - Enviar emails com send_email
 - Enviar WhatsApp com send_whatsapp
 - Entender audios transcritos automaticamente
@@ -29,9 +29,9 @@ const tools = [
     }, required: ["origin","destination","outbound_date"] }
   },
   { name: "browse_web",
-    description: "Pesquisa na internet. NAO usar para passagens aereas ou emails.",
+    description: "Pesquisa qualquer assunto na internet: noticias, precos, informacoes gerais, clima, eventos. NAO usar para passagens aereas.",
     input_schema: { type: "object", properties: {
-      task: { type: "string" }, url: { type: "string" }
+      task: { type: "string", description: "O que pesquisar" }
     }, required: ["task"] }
   },
   { name: "send_email",
@@ -95,7 +95,7 @@ export async function executeBolt(userId, userMessage) {
           });
           toolResult = "WhatsApp enviado para " + toolBlock.input.to;
         } else {
-          toolResult = await browseWeb(toolBlock.input.task, toolBlock.input.url);
+          toolResult = await searchWeb(toolBlock.input.task);
         }
       } catch (err) {
         toolResult = "Erro: " + err.message;
