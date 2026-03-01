@@ -132,7 +132,43 @@ export async function executeBolt(userId, userMessage) {
     }
   } catch (err) {
     console.error("executeBolt error:", err.message);
-    finalText = "Desculpe, ocorreu um erro. Tente novamente.";
+    if (err.message && err.message.includes("tool_use")) {
+      // Historico corrompido — limpa e tenta de novo sem historico
+      console.log("Limpando historico corrompido para:", userId);
+      const { clearMsgs } = await import("../memory/db.js");
+      clearMsgs(userId);
+      try {
+        const retry = await client.messages.create({
+          model: process.env.MODEL || "claude-sonnet-4-6",
+          max_tokens: 1024,
+          system: SYSTEM_PROMPT,
+          tools,
+          messages: [{ role: "user", content: userMessage }],
+          ...(isFlightQuery ? { tool_choice: { type: "tool", name: "search_flights" } } : {})
+        });
+        if (retry.stop_reason === "tool_use") {
+          const tb = retry.content.find(b => b.type === "tool_use");
+          let tr = "Erro.";
+          if (tb.name === "search_flights") tr = await searchFlights(tb.input);
+          const fu = await client.messages.create({
+            model: process.env.MODEL || "claude-sonnet-4-6",
+            max_tokens: 1024, system: SYSTEM_PROMPT, tools,
+            messages: [
+              { role: "user", content: userMessage },
+              { role: "assistant", content: retry.content },
+              { role: "user", content: [{ type: "tool_result", tool_use_id: tb.id, content: tr }] }
+            ],
+          });
+          finalText = fu.content.filter(b => b.type === "text").map(b => b.text).join("");
+        } else {
+          finalText = retry.content.filter(b => b.type === "text").map(b => b.text).join("");
+        }
+      } catch(e2) {
+        finalText = "Desculpe, tente novamente.";
+      }
+    } else {
+      finalText = "Desculpe, ocorreu um erro. Tente novamente.";
+    }
   }
 
   if (!finalText) finalText = "Desculpe, nao consegui processar.";
