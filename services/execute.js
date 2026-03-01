@@ -41,6 +41,13 @@ export async function executeBolt(userId, userMessage) {
         task: { type: "string" }, url: { type: "string" }
       }, required: ["task"] }
     },
+    { name: "send_whatsapp",
+      description: "Envia uma mensagem WhatsApp para um numero de telefone. Use quando o usuario pedir para mandar mensagem para alguem pelo WhatsApp.",
+      input_schema: { type: "object", properties: {
+        to: { type: "string", description: "Numero com codigo do pais ex: +5511999999999" },
+        message: { type: "string", description: "Texto da mensagem a enviar" }
+      }, required: ["to","message"] }
+    },
     { name: "send_email",
       description: "Envia um email para o destinatario solicitado pelo usuario.",
       input_schema: { type: "object", properties: {
@@ -62,6 +69,15 @@ export async function executeBolt(userId, userMessage) {
     try {
       if (toolBlock.name === "search_flights") {
         toolResult = await searchFlights(toolBlock.input);
+      } else if (toolBlock.name === "send_whatsapp") {
+        const twilio = (await import("twilio")).default;
+        const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+        await client.messages.create({
+          from: "whatsapp:+14155238886",
+          to: "whatsapp:" + toolBlock.input.to,
+          body: toolBlock.input.message
+        });
+        toolResult = "Mensagem WhatsApp enviada para " + toolBlock.input.to;
       } else if (toolBlock.name === "send_email") {
         await sendEmail(toolBlock.input);
         toolResult = "Email enviado com sucesso para " + toolBlock.input.to;
