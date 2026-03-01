@@ -120,6 +120,7 @@ export async function executeBolt(userId, userMessage) {
 
       finalText = followUp.content.filter(b => b.type === "text").map(b => b.text).join("");
       console.log("followUp stop_reason:", followUp.stop_reason, "finalText length:", finalText.length);
+      console.log("followUp content:", JSON.stringify(followUp.content));
     } else {
       finalText = response.content.filter(b => b.type === "text").map(b => b.text).join("");
     }
