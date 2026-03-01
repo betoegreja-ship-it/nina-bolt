@@ -1,4 +1,5 @@
 // routes/admin.js — Gestão de API Keys e logs (protegido por ADMIN_SECRET)
+import { clearAllMsgs } from '../memory/db.js';
 import { Router } from "express";
 import crypto from "crypto";
 import { createApiKey, listKeys, revokeKey, getLogs } from "../memory/db.js";
@@ -39,12 +40,11 @@ router.get("/logs", adminOnly, (req, res) => {
   res.json(getLogs(limit));
 });
 
-export default router;
-
-import { clearAllMsgs } from '../memory/db.js';
 router.delete('/clear-all', (req, res) => {
   const secret = req.headers['x-admin-secret'];
   if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
   clearAllMsgs();
   res.json({ ok: true, message: 'Todos os historicos limpos!' });
 });
+
+export default router;
