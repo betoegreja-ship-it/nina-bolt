@@ -104,16 +104,16 @@ export async function executeBolt(userId, userMessage) {
       const executedToolBlock = toolBlocks[0];
       const assistantContent = [executedToolBlock];
       
-      console.log('Tool result preview:', String(toolResults[0]?.content || '').slice(0, 200));
+      const toolResultText = String(toolResults[0]?.content || "Sem resultados");
+      console.log('Tool result preview:', toolResultText.slice(0, 200));
+      
+      // Chamada simples SEM tools para formatar resultado em texto
       const followUp = await client.messages.create({
         model: process.env.MODEL || "claude-sonnet-4-6",
         max_tokens: 1024,
         system: SYSTEM_PROMPT,
-        tools,
         messages: [
-          { role: "user", content: userMessage },
-          { role: "assistant", content: assistantContent },
-          { role: "user", content: toolResults }
+          { role: "user", content: `O usuario pediu: "${userMessage}"\n\nResultados encontrados:\n${toolResultText}\n\nApresente esses resultados de forma clara, organizada e amigavel em portugues. Inclua precos, companhias, duracao e horarios.` }
         ],
       });
 
