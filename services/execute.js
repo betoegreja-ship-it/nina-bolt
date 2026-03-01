@@ -113,7 +113,7 @@ export async function executeBolt(userId, userMessage) {
         max_tokens: 1024,
         system: SYSTEM_PROMPT,
         messages: [
-          { role: "user", content: `O usuario pediu: "${userMessage}"\n\nResultados encontrados:\n${toolResultText}\n\nApresente esses resultados de forma clara, organizada e amigavel em portugues. Inclua precos, companhias, duracao e horarios.` }
+          { role: "user", content: `O usuario pediu: "${userMessage}"\n\nResultados encontrados:\n${toolResultText}\n\nApresente esses resultados de forma CURTA e simples para WhatsApp. Sem markdown, sem tabelas, sem hashtags. Use emojis. Maximo 5 opcoes. Formato: companhia, preco, duracao, horario. No final pergunte se quer mais detalhes.` }
         ],
       });
 
