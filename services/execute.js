@@ -20,7 +20,9 @@ export async function executeBolt(userId, userMessage) {
   const history = allMsgs(userId, 20);
   saveMsg(userId, "user", userMessage);
   const messages = [
-    ...history.slice(0,-1).filter(m => typeof m.content === "string").map(m => ({ role: m.role, content: m.content })),
+    ...history.slice(0,-1)
+      .filter(m => typeof m.content === "string" && m.content.length > 0 && !m.content.includes("tool_use"))
+      .map(m => ({ role: m.role, content: m.content })),
     { role: "user", content: userMessage }
   ];
   const tools = [
@@ -98,6 +100,9 @@ export async function executeBolt(userId, userMessage) {
     finalText = response.content.filter(b => b.type === "text").map(b => b.text).join("");
   }
   if (!finalText) finalText = "Desculpe, nao consegui processar.";
-  saveMsg(userId, "assistant", finalText);
+  // Salva APENAS texto puro — nunca tool_use no historico
+  if (finalText && typeof finalText === "string") {
+    saveMsg(userId, "assistant", finalText);
+  }
   return finalText;
 }
