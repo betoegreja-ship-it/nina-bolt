@@ -73,12 +73,16 @@ export async function executeBolt(userId, userMessage) {
   let finalText = "";
 
   try {
+    const flightKeywords = ["passagem","voo","voar","viagem","aerea","aereo","destino","origem","gru","gig","hkg","jfk","mia","executiva","economica","primeira classe","ida e volta"];
+    const isFlightQuery = flightKeywords.some(k => userMessage.toLowerCase().includes(k));
+    
     const response = await client.messages.create({
       model: process.env.MODEL || "claude-sonnet-4-6",
       max_tokens: 1024,
       system: SYSTEM_PROMPT,
       tools,
       messages,
+      ...(isFlightQuery ? { tool_choice: { type: "tool", name: "search_flights" } } : {})
     });
 
     if (response.stop_reason === "tool_use") {
