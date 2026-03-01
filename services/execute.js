@@ -163,7 +163,8 @@ export async function executeBolt(userId, userMessage) {
           finalText = retry.content.filter(b => b.type === "text").map(b => b.text).join("");
         }
       } catch(e2) {
-        finalText = "Desculpe, tente novamente.";
+        console.error("RETRY ERROR:", e2.message);
+        finalText = "Desculpe, tente novamente: " + e2.message;
       }
     } else {
       finalText = "Desculpe, ocorreu um erro. Tente novamente.";
