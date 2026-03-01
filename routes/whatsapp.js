@@ -38,7 +38,7 @@ router.post("/", async (req, res) => {
       fs.writeFileSync(filepath, audioBuffer);
       const publicUrl = "https://" + process.env.RAILWAY_PUBLIC_DOMAIN + "/audio/" + filename;
       const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-      await client.messages.create({ from: "whatsapp:+14155238886", to: from, mediaUrl: [publicUrl] });
+      await client.messages.create({ from: "whatsapp:+13524505624", to: from, mediaUrl: [publicUrl] });
       setTimeout(() => { try { fs.unlinkSync(filepath); } catch(_) {} }, 60000);
       return res.send("<Response></Response>");
     } catch (err) { console.error("Erro TTS:", err.message); }

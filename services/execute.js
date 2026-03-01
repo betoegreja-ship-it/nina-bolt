@@ -73,7 +73,7 @@ export async function executeBolt(userId, userMessage) {
         const twilio = (await import("twilio")).default;
         const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
         await client.messages.create({
-          from: "whatsapp:+14155238886",
+          from: "whatsapp:+13524505624",
           to: "whatsapp:" + toolBlock.input.to,
           body: toolBlock.input.message
         });
