@@ -100,6 +100,10 @@ export async function executeBolt(userId, userMessage) {
         }
       }));
 
+      // Usa APENAS o tool_use que executamos, nao todos
+      const executedToolBlock = toolBlocks[0];
+      const assistantContent = [executedToolBlock];
+      
       const followUp = await client.messages.create({
         model: process.env.MODEL || "claude-sonnet-4-6",
         max_tokens: 1024,
@@ -107,7 +111,7 @@ export async function executeBolt(userId, userMessage) {
         tools,
         messages: [
           { role: "user", content: userMessage },
-          { role: "assistant", content: response.content },
+          { role: "assistant", content: assistantContent },
           { role: "user", content: toolResults }
         ],
       });
