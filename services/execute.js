@@ -6,73 +6,74 @@ import { sendEmail } from "./email.js";
 import dotenv from "dotenv";
 dotenv.config();
 
-const SYSTEM_PROMPT = `Voce e a Nina Egreja, assistente pessoal inteligente e autonoma.
-Voce tem as seguintes capacidades:
-- Buscar passagens aereas reais com search_flights (use codigos IATA)
-- Pesquisar qualquer assunto na internet com browse_web (noticias, clima, precos, etc)
-- Enviar emails com send_email
-- Enviar WhatsApp com send_whatsapp
-- Entender audios transcritos automaticamente
-- Lembrar conversas anteriores
-Use apenas UMA ferramenta por resposta. Responda sempre em portugues do Brasil. O ano atual e 2026.`;
+const SYSTEM_PROMPT = `Voce e a Nina Egreja, assistente pessoal inteligente e autonoma. Ano atual: 2026.
+Capacidades: search_flights (passagens aereas), browse_web (pesquisas), send_email, send_whatsapp.
+IMPORTANTE: Use apenas UMA ferramenta por vez. Responda em portugues do Brasil.`;
 
 const tools = [
   { name: "search_flights",
     description: "Busca passagens aereas reais. Use para voos, passagens, precos de viagem aerea.",
     input_schema: { type: "object", properties: {
-      origin: { type: "string", description: "Codigo IATA origem ex: GRU" },
-      destination: { type: "string", description: "Codigo IATA destino ex: HKG" },
-      outbound_date: { type: "string", description: "Data ida YYYY-MM-DD" },
-      return_date: { type: "string", description: "Data volta YYYY-MM-DD" },
-      adults: { type: "number", description: "Passageiros adultos" },
-      travel_class: { type: "number", description: "1=economica 2=executiva 3=primeira" }
+      origin: { type: "string" }, destination: { type: "string" },
+      outbound_date: { type: "string" }, return_date: { type: "string" },
+      adults: { type: "number" }, travel_class: { type: "number" }
     }, required: ["origin","destination","outbound_date"] }
   },
   { name: "browse_web",
-    description: "Pesquisa qualquer assunto na internet: noticias, precos, informacoes gerais, clima, eventos. NAO usar para passagens aereas.",
+    description: "Pesquisa qualquer assunto: noticias, clima, precos, informacoes gerais.",
     input_schema: { type: "object", properties: {
-      task: { type: "string", description: "O que pesquisar" }
+      task: { type: "string" }
     }, required: ["task"] }
   },
   { name: "send_email",
-    description: "Envia um email para o destinatario solicitado pelo usuario.",
+    description: "Envia um email.",
     input_schema: { type: "object", properties: {
       to: { type: "string" }, subject: { type: "string" }, body: { type: "string" }
     }, required: ["to","subject","body"] }
   },
   { name: "send_whatsapp",
-    description: "Envia uma mensagem WhatsApp para um numero de telefone.",
+    description: "Envia mensagem WhatsApp.",
     input_schema: { type: "object", properties: {
-      to: { type: "string", description: "Numero com codigo do pais ex: +5511999999999" },
-      message: { type: "string" }
+      to: { type: "string" }, message: { type: "string" }
     }, required: ["to","message"] }
   }
 ];
 
+async function runTool(name, input) {
+  if (name === "search_flights") return await searchFlights(input);
+  if (name === "browse_web") return await searchWeb(input.task);
+  if (name === "send_email") {
+    await sendEmail(input);
+    return "Email enviado para " + input.to;
+  }
+  if (name === "send_whatsapp") {
+    const twilio = (await import("twilio")).default;
+    const tc = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+    await tc.messages.create({ from: "whatsapp:+13524505624", to: "whatsapp:" + input.to, body: input.message });
+    return "WhatsApp enviado para " + input.to;
+  }
+  return "Ferramenta desconhecida.";
+}
+
 export async function executeBolt(userId, userMessage) {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-  // Busca historico — apenas mensagens texto puras
-  const history = allMsgs(userId, 20);
+  // Historico limpo — apenas texto puro
+  const history = allMsgs(userId, 10);
   const cleanHistory = history
     .slice(0, -1)
-    .filter(m => {
-      if (typeof m.content !== "string") return false;
-      if (m.content.trim().length === 0) return false;
-      if (m.content.includes("tool_use")) return false;
-      if (m.content.includes("tool_result")) return false;
-      if (m.content.includes("toolu_")) return false;
-      return true;
-    })
+    .filter(m => typeof m.content === "string" && m.content.trim().length > 0)
     .map(m => ({ role: m.role, content: m.content }));
 
   saveMsg(userId, "user", userMessage);
 
-  const messages = [...cleanHistory, { role: "user", content: userMessage }];
+  const flightKeywords = ["passagem","voo","voar","passagens","aerea","aereo","executiva","economica","gru","gig","hkg","jfk","mia","lax","cdg","lhr"];
+  const isFlightQuery = flightKeywords.some(k => userMessage.toLowerCase().includes(k));
+
+  // Usa apenas a mensagem atual, sem historico, para evitar corrupcao
+  const messages = [{ role: "user", content: userMessage }];
 
   let finalText = "";
-  const flightKeywords = ["passagem","voo","voar","viagem","aerea","aereo","destino","origem","gru","gig","hkg","jfk","mia","executiva","economica","primeira classe","ida e volta"];
-  const isFlightQuery = flightKeywords.some(k => userMessage.toLowerCase().includes(k));
 
   try {
     const response = await client.messages.create({
@@ -85,34 +86,20 @@ export async function executeBolt(userId, userMessage) {
     });
 
     if (response.stop_reason === "tool_use") {
-      const toolBlock = response.content.find(b => b.type === "tool_use");
-      console.log("Tool:", toolBlock.name, JSON.stringify(toolBlock.input));
+      const toolBlocks = response.content.filter(b => b.type === "tool_use");
+      console.log("Tools:", toolBlocks.map(t => t.name));
 
-      let toolResult = "Erro ao executar ferramenta.";
-      try {
-        if (toolBlock.name === "search_flights") {
-          toolResult = await searchFlights(toolBlock.input);
-        } else if (toolBlock.name === "send_email") {
-          await sendEmail(toolBlock.input);
-          toolResult = "Email enviado com sucesso para " + toolBlock.input.to;
-        } else if (toolBlock.name === "send_whatsapp") {
-          const twilio = (await import("twilio")).default;
-          const client2 = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-          await client2.messages.create({
-            from: "whatsapp:+13524505624",
-            to: "whatsapp:" + toolBlock.input.to,
-            body: toolBlock.input.message
-          });
-          toolResult = "WhatsApp enviado para " + toolBlock.input.to;
-        } else {
-          toolResult = await searchWeb(toolBlock.input.task);
+      // Executa todas as tools e coleta resultados
+      const toolResults = await Promise.all(toolBlocks.map(async (tb) => {
+        try {
+          const result = await runTool(tb.name, tb.input);
+          return { type: "tool_result", tool_use_id: tb.id, content: String(result) };
+        } catch(e) {
+          console.error("Tool error:", tb.name, e.message);
+          return { type: "tool_result", tool_use_id: tb.id, content: "Erro: " + e.message };
         }
-      } catch (err) {
-        toolResult = "Erro: " + err.message;
-        console.error("Tool error:", err.message);
-      }
+      }));
 
-      // Segunda chamada com resultado da tool — SEM historico para evitar corrupcao
       const followUp = await client.messages.create({
         model: process.env.MODEL || "claude-sonnet-4-6",
         max_tokens: 1024,
@@ -121,7 +108,7 @@ export async function executeBolt(userId, userMessage) {
         messages: [
           { role: "user", content: userMessage },
           { role: "assistant", content: response.content },
-          { role: "user", content: [{ type: "tool_result", tool_use_id: toolBlock.id, content: toolResult }] }
+          { role: "user", content: toolResults }
         ],
       });
 
@@ -131,44 +118,7 @@ export async function executeBolt(userId, userMessage) {
     }
   } catch (err) {
     console.error("executeBolt error:", err.message);
-    if (err.message && err.message.includes("tool_use")) {
-      // Historico corrompido — limpa e tenta de novo sem historico
-      console.log("Limpando historico corrompido para:", userId);
-      const { clearMsgs } = await import("../memory/db.js");
-      clearMsgs(userId);
-      try {
-        const retry = await client.messages.create({
-          model: process.env.MODEL || "claude-sonnet-4-6",
-          max_tokens: 1024,
-          system: SYSTEM_PROMPT,
-          tools,
-          messages: [{ role: "user", content: userMessage }],
-          ...(isFlightQuery ? { tool_choice: { type: "tool", name: "search_flights" } } : {})
-        });
-        if (retry.stop_reason === "tool_use") {
-          const tb = retry.content.find(b => b.type === "tool_use");
-          let tr = "Erro.";
-          if (tb.name === "search_flights") tr = await searchFlights(tb.input);
-          const fu = await client.messages.create({
-            model: process.env.MODEL || "claude-sonnet-4-6",
-            max_tokens: 1024, system: SYSTEM_PROMPT, tools,
-            messages: [
-              { role: "user", content: userMessage },
-              { role: "assistant", content: retry.content },
-              { role: "user", content: [{ type: "tool_result", tool_use_id: tb.id, content: tr }] }
-            ],
-          });
-          finalText = fu.content.filter(b => b.type === "text").map(b => b.text).join("");
-        } else {
-          finalText = retry.content.filter(b => b.type === "text").map(b => b.text).join("");
-        }
-      } catch(e2) {
-        console.error("RETRY ERROR:", e2.message);
-        finalText = "Desculpe, tente novamente: " + e2.message;
-      }
-    } else {
-      finalText = "Desculpe, ocorreu um erro. Tente novamente.";
-    }
+    finalText = "Desculpe, ocorreu um erro. Tente novamente.";
   }
 
   if (!finalText) finalText = "Desculpe, nao consegui processar.";
