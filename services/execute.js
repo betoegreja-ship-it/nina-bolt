@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { allMsgs, saveMsg } from "../memory/db.js";
+import { allMsgs, saveMsg, clearMsgs } from "../memory/db.js";
 import { browseWeb } from "./browser.js";
 import { searchFlights } from "./flights.js";
 import dotenv from "dotenv";
@@ -14,10 +14,14 @@ export async function executeBolt(userId, userMessage) {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const history = allMsgs(userId, 20);
   saveMsg(userId, "user", userMessage);
-  const messages = [
-    ...history.slice(0,-1).map(m => ({ role: m.role, content: m.content })),
-    { role: "user", content: userMessage }
-  ];
+
+  // Filtra apenas mensagens simples de texto (sem tool_use no historico)
+  const messages = history
+    .slice(0, -1)
+    .filter(m => typeof m.content === "string")
+    .map(m => ({ role: m.role, content: m.content }));
+  messages.push({ role: "user", content: userMessage });
+
   const tools = [
     { name: "search_flights",
       description: "Busca passagens aereas reais. Use para voos, passagens, precos de viagem aerea.",
@@ -37,11 +41,14 @@ export async function executeBolt(userId, userMessage) {
       }, required: ["task"] }
     }
   ];
+
   const response = await client.messages.create({
     model: process.env.MODEL || "claude-sonnet-4-6",
     max_tokens: 1024, system: SYSTEM_PROMPT, tools, messages,
   });
+
   let finalText = "";
+
   if (response.stop_reason === "tool_use") {
     const toolBlock = response.content.find(b => b.type === "tool_use");
     console.log("Tool:", toolBlock.name);
@@ -53,6 +60,7 @@ export async function executeBolt(userId, userMessage) {
         toolResult = await browseWeb(toolBlock.input.task, toolBlock.input.url);
       }
     } catch (err) { toolResult = "Erro: " + err.message; }
+
     const followUp = await client.messages.create({
       model: process.env.MODEL || "claude-sonnet-4-6",
       max_tokens: 1024, system: SYSTEM_PROMPT, tools,
@@ -65,6 +73,7 @@ export async function executeBolt(userId, userMessage) {
   } else {
     finalText = response.content.filter(b => b.type === "text").map(b => b.text).join("");
   }
+
   if (!finalText) finalText = "Desculpe, nao consegui processar.";
   saveMsg(userId, "assistant", finalText);
   return finalText;
