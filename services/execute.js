@@ -71,11 +71,10 @@ export async function executeBolt(userId, userMessage) {
   const messages = [...cleanHistory, { role: "user", content: userMessage }];
 
   let finalText = "";
+  const flightKeywords = ["passagem","voo","voar","viagem","aerea","aereo","destino","origem","gru","gig","hkg","jfk","mia","executiva","economica","primeira classe","ida e volta"];
+  const isFlightQuery = flightKeywords.some(k => userMessage.toLowerCase().includes(k));
 
   try {
-    const flightKeywords = ["passagem","voo","voar","viagem","aerea","aereo","destino","origem","gru","gig","hkg","jfk","mia","executiva","economica","primeira classe","ida e volta"];
-    const isFlightQuery = flightKeywords.some(k => userMessage.toLowerCase().includes(k));
-    
     const response = await client.messages.create({
       model: process.env.MODEL || "claude-sonnet-4-6",
       max_tokens: 1024,
