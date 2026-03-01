@@ -86,7 +86,7 @@ export async function executeBolt(userId, userMessage) {
     });
 
     if (response.stop_reason === "tool_use") {
-      const toolBlocks = response.content.filter(b => b.type === "tool_use");
+      const toolBlocks = response.content.filter(b => b.type === "tool_use").slice(0, 1);
       console.log("Tools:", toolBlocks.map(t => t.name));
 
       // Executa todas as tools e coleta resultados
