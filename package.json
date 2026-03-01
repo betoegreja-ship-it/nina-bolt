@@ -26,6 +26,7 @@
     "nodemailer": "^8.0.1",
     "openai": "^6.25.0",
     "playwright-core": "^1.58.2",
+    "resend": "^6.9.3",
     "twilio": "^5.12.2"
   }
 }
