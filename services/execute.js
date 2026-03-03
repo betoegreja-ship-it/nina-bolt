@@ -126,7 +126,7 @@ function mergeState(agentState, delta) {
 
 async function extractStateDelta(client, model, userMessage, assistantReply, agentState) {
   try {
-    const resp = await client.messages.create({
+    const resp = await withRetry(() => client.messages.create({
       model,
       max_tokens: 200,
       system: `Extraia dados persistentes do usuario. Retorne SOMENTE JSON valido. Se nao houver nada novo, retorne {}.
@@ -141,6 +141,21 @@ Formato: {"profile": {}, "goals": [], "memory": {}}`,
   } catch (e) {
     console.error("extractStateDelta error:", e.message);
     return {};
+  }
+}
+
+
+async function withRetry(fn, maxRetries = 3) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (e.status === 529 && i < maxRetries - 1) {
+        const wait = (i + 1) * 4000;
+        console.log(`API overloaded, retry ${i+1} em ${wait/1000}s...`);
+        await new Promise(r => setTimeout(r, wait));
+      } else throw e;
+    }
   }
 }
 
@@ -165,7 +180,7 @@ export async function executeBolt(userId, userMessage) {
 
   try {
     // Primeira chamada
-    const response = await client.messages.create({
+    const response = await withRetry(() => client.messages.create({
       model,
       max_tokens: 1024,
       system: systemPrompt,
@@ -185,7 +200,7 @@ export async function executeBolt(userId, userMessage) {
       }
 
       // Segunda chamada — sem tools, só formata resposta
-      const followUp = await client.messages.create({
+      const followUp = await withRetry(() => client.messages.create({
         model,
         max_tokens: 1024,
         system: systemPrompt,
