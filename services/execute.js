@@ -187,7 +187,7 @@ export async function executeBolt(userId, userMessage) {
       tools,
       messages,
       ...(isFlightQuery ? { tool_choice: { type: "tool", name: "search_flights" } } : {})
-    });
+    }));
 
     if (response.stop_reason === "tool_use") {
       const toolBlock = response.content.find(b => b.type === "tool_use");
@@ -208,7 +208,7 @@ export async function executeBolt(userId, userMessage) {
           role: "user",
           content: `O usuario pediu: "${userMessage}"\n\nResultado da busca:\n${toolResult}\n\nApresente os resultados de forma clara, curta e amigavel para WhatsApp. Sem markdown, sem tabelas. Use emojis. Maximo 5 opcoes com companhia, preco, duracao e horario. No final pergunte se quer mais detalhes.`
         }]
-      });
+      }));
       finalText = followUp.content.filter(b => b.type === "text").map(b => b.text).join("");
     } else {
       finalText = response.content.filter(b => b.type === "text").map(b => b.text).join("");
