@@ -94,3 +94,40 @@ export function getLogs(limit = 100) {
     .prepare(`SELECT * FROM logs ORDER BY id DESC LIMIT ?`)
     .all(limit);
 }
+// ── Agent State ───────────────────────────────────────
+export function getAgentState(userId) {
+  const row = db
+    .prepare(`SELECT * FROM agent_state WHERE user_id = ?`)
+    .get(userId);
+
+  if (!row) {
+    return {
+      profile: {},
+      goals: [],
+      memory: {}
+    };
+  }
+
+  return {
+    profile: JSON.parse(row.profile_json || "{}"),
+    goals: JSON.parse(row.goals_json || "[]"),
+    memory: JSON.parse(row.memory_json || "{}")
+  };
+}
+
+export function saveAgentState(userId, state) {
+  db.prepare(`
+    INSERT INTO agent_state (user_id, profile_json, goals_json, memory_json, updated_at)
+    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(user_id) DO UPDATE SET
+      profile_json = excluded.profile_json,
+      goals_json   = excluded.goals_json,
+      memory_json  = excluded.memory_json,
+      updated_at   = CURRENT_TIMESTAMP
+  `).run(
+    userId,
+    JSON.stringify(state.profile || {}),
+    JSON.stringify(state.goals || []),
+    JSON.stringify(state.memory || {})
+  );
+}
