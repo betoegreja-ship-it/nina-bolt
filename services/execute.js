@@ -135,7 +135,7 @@ Formato: {"profile": {}, "goals": [], "memory": {}}`,
         role: "user",
         content: `Mensagem: ${userMessage}\nResposta Nina: ${assistantReply}\nEstado atual: PERFIL=${JSON.stringify(agentState.profile || {})} METAS=${JSON.stringify(agentState.goals || [])} MEMORIA=${JSON.stringify(agentState.memory || {})}`
       }]
-    });
+    }));
     const txt = resp.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
     return safeJsonParse(txt) || {};
   } catch (e) {
