@@ -16,7 +16,7 @@ export async function searchFlights({ origin, destination, outbound_date, return
     api_key: process.env.SERPAPI_KEY
   };
 
-  const res = await axios.get("https://serpapi.com/search", { params });
+  const res = await axios.get("https://serpapi.com/search", { params, timeout: 12000 });
   const data = res.data;
 
   const flights = data.best_flights || data.other_flights || [];
