@@ -24,6 +24,14 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
+  CREATE TABLE IF NOT EXISTS agent_state (
+    user_id      TEXT PRIMARY KEY,
+    profile_json TEXT DEFAULT '{}',
+    goals_json   TEXT DEFAULT '[]',
+    memory_json  TEXT DEFAULT '{}',
+    updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
   CREATE TABLE IF NOT EXISTS logs (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id    TEXT,
