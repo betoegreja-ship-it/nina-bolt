@@ -15,36 +15,53 @@ if (!fs.existsSync(audioDir)) fs.mkdirSync(audioDir, { recursive: true });
 
 const router = Router();
 
+async function sendWhatsApp(to, message) {
+  const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+  await client.messages.create({ from: "whatsapp:+13524505624", to, body: message });
+}
+
 router.post("/", async (req, res) => {
   const from = req.body.From;
   const mediaUrl = req.body.MediaUrl0;
   const mediaType = req.body.MediaContentType0 || "";
   let userMessage = req.body.Body?.trim();
   const isAudio = !!(mediaUrl && mediaType.includes("audio"));
+
   if (!from) return res.status(400).send("<Response></Response>");
   const userId = from.replace("whatsapp:", "");
-  if (isAudio) {
-    try { userMessage = await transcribeAudio(mediaUrl); }
-    catch (err) { userMessage = "Recebi um audio mas nao consegui entender."; }
-  }
-  if (!userMessage) return res.send("<Response></Response>");
-  let reply = "Erro.";
-  try { reply = await executeBolt(userId, userMessage); } catch (err) { console.error(err.message); }
-  if (isAudio) {
-    try {
-      const audioBuffer = await textToSpeech(reply);
-      const filename = "nina_" + Date.now() + ".mp3";
-      const filepath = path.join(audioDir, filename);
-      fs.writeFileSync(filepath, audioBuffer);
-      const publicUrl = "https://" + process.env.RAILWAY_PUBLIC_DOMAIN + "/audio/" + filename;
-      const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-      await client.messages.create({ from: "whatsapp:+13524505624", to: from, mediaUrl: [publicUrl] });
-      setTimeout(() => { try { fs.unlinkSync(filepath); } catch(_) {} }, 60000);
-      return res.send("<Response></Response>");
-    } catch (err) { console.error("Erro TTS:", err.message); }
-  }
+
   res.set("Content-Type", "text/xml");
-  res.send("<Response><Message>" + reply.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;") + "</Message></Response>");
+  res.send("<Response></Response>");
+
+  try {
+    if (isAudio) {
+      try { userMessage = await transcribeAudio(mediaUrl); }
+      catch (err) { userMessage = "Recebi um audio mas nao consegui entender."; }
+    }
+    if (!userMessage) return;
+
+    const reply = await executeBolt(userId, userMessage);
+
+    if (isAudio) {
+      try {
+        const audioBuffer = await textToSpeech(reply);
+        const filename = "nina_" + Date.now() + ".mp3";
+        const filepath = path.join(audioDir, filename);
+        fs.writeFileSync(filepath, audioBuffer);
+        const publicUrl = "https://" + process.env.RAILWAY_PUBLIC_DOMAIN + "/audio/" + filename;
+        const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+        await client.messages.create({ from: "whatsapp:+13524505624", to: from, mediaUrl: [publicUrl] });
+        setTimeout(() => { try { fs.unlinkSync(filepath); } catch(_) {} }, 60000);
+        return;
+      } catch (err) { console.error("Erro TTS:", err.message); }
+    }
+
+    await sendWhatsApp(from, reply);
+
+  } catch (err) {
+    console.error("WhatsApp error:", err.message);
+    try { await sendWhatsApp(from, "Desculpe, ocorreu um erro. Tente novamente."); } catch(_) {}
+  }
 });
 
 export default router;
