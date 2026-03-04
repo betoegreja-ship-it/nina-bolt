@@ -1,7 +1,4 @@
 node_modules/
-dist/
 .env
-.env.local
-*.tar.gz
-.DS_Store
-dist.tar.gz
+bolt_memory.db
+*.log
