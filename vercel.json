@@ -1,13 +1,7 @@
 {
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": { "distDir": "dist" }
-    }
-  ],
+  "buildCommand": "echo 'Pre-built distribution ready'",
+  "outputDirectory": "dist",
   "routes": [
-    { "src": "/", "dest": "/index.html" },
     { "src": "/assets/(.*)", "dest": "/assets/$1" },
     { "src": "/(.*)", "dest": "/index.html" }
   ]
