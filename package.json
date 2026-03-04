@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "start": "npx serve -s dist -l $PORT"
+    "start": "npx serve -s dist -l $PORT",
+    "vercel-build": "echo 'Build already prepared'"
   },
   "engines": {
     "node": "20"
