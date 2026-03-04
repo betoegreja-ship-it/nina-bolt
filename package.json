@@ -1,15 +1,14 @@
 {
   "name": "egreja-dashboard",
   "version": "1.0.0",
-  "description": "Egreja Investment AI PRO - Frontend Dashboard",
+  "type": "module",
   "scripts": {
-    "start": "serve -s dist -l 3000",
-    "serve": "serve -s dist -l 3000"
+    "start": "npx serve -s dist -l $PORT"
   },
-  "keywords": ["trading", "dashboard", "investment"],
-  "author": "Beto Egreja",
-  "license": "MIT",
+  "engines": {
+    "node": "20"
+  },
   "dependencies": {
-    "serve": "^14.0.0"
+    "serve": "^14.2.0"
   }
 }
