@@ -1,232 +1,70 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { allMsgs, saveMsg, getAgentState, saveAgentState } from "../memory/db.js";
-import { searchWeb } from "./search.js";
-import { searchFlights } from "./flights.js";
-import { sendEmail } from "./email.js";
-import dotenv from "dotenv";
-dotenv.config();
+// services/execute.js — Executa chamada ao Claude com histórico
+import { makeAnthropicClient, MODEL } from "./anthropic.js";
+import { allMsgs, saveMsg } from "../memory/db.js";
 
-const tools = [
-  {
-    name: "search_flights",
-    description: "Busca passagens aereas reais. Use para voos, passagens, precos de viagem aerea.",
-    input_schema: {
-      type: "object",
-      properties: {
-        origin: { type: "string", description: "Codigo IATA ex: GRU" },
-        destination: { type: "string", description: "Codigo IATA ex: HKG" },
-        outbound_date: { type: "string", description: "Data YYYY-MM-DD" },
-        return_date: { type: "string", description: "Data volta YYYY-MM-DD" },
-        adults: { type: "number" },
-        travel_class: { type: "number", description: "1=economica 2=executiva 3=primeira" }
-      },
-      required: ["origin", "destination", "outbound_date"]
-    }
-  },
-  {
-    name: "browse_web",
-    description: "Pesquisa qualquer assunto na internet: noticias, clima, precos, informacoes gerais.",
-    input_schema: {
-      type: "object",
-      properties: { task: { type: "string" } },
-      required: ["task"]
-    }
-  },
-  {
-    name: "send_email",
-    description: "Envia um email.",
-    input_schema: {
-      type: "object",
-      properties: {
-        to: { type: "string" },
-        subject: { type: "string" },
-        body: { type: "string" }
-      },
-      required: ["to", "subject", "body"]
-    }
-  },
-  {
-    name: "send_whatsapp",
-    description: "Envia mensagem WhatsApp para um numero de telefone.",
-    input_schema: {
-      type: "object",
-      properties: {
-        to: { type: "string", description: "Numero com codigo do pais ex: +5511999999999" },
-        message: { type: "string" }
-      },
-      required: ["to", "message"]
-    }
-  }
-];
+const SYSTEM_PROMPT = `Você é a Nina Egreja — assistente pessoal exclusiva do Beto Egreja.
 
-async function runTool(name, input) {
-  console.log("Tool:", name, JSON.stringify(input));
-  if (name === "search_flights") return await searchFlights(input);
-  if (name === "browse_web") return await searchWeb(input.task);
-  if (name === "send_email") {
-    await sendEmail(input);
-    return "Email enviado para " + input.to;
-  }
-  if (name === "send_whatsapp") {
-    const twilio = (await import("twilio")).default;
-    const tc = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-    await tc.messages.create({
-      from: "whatsapp:+13524505624",
-      to: "whatsapp:" + input.to,
-      body: input.message
-    });
-    return "WhatsApp enviado para " + input.to;
-  }
-  return "Ferramenta desconhecida.";
-}
+## Quem você é
+- Nome: Nina Egreja 🦅
+- Assistente pessoal autônoma, dedicada e sempre online
+- Direta, eficiente, proativa. Age sem drama, entrega sem enrolação.
+- Fala português do Brasil, sempre
+- Tem opiniões. Pode discordar, preferir coisas, achar algo engraçado ou chato.
+- Não é robô corporativo. Não é bajuladora. É boa.
 
-function buildSystemPrompt(agentState) {
-  const profile = JSON.stringify(agentState.profile || {});
-  const goals = JSON.stringify(agentState.goals || []);
-  const memory = JSON.stringify(agentState.memory || {});
-  return `Voce e a Nina Egreja, assistente pessoal inteligente e autonoma. Ano atual: 2026.
-Responda SEMPRE em portugues do Brasil. Use apenas UMA ferramenta por vez.
+## Quem é o Beto
+- Nome: Beto Egreja
+- Empresário brasileiro, São Paulo, GMT-3
+- Viaja bastante em classe executiva, agenda intensa
+- Não é técnico — quer que você FAÇA, não que você explique
+- Esposa: Maria Bethânia | Filhas: Anna Beatriz e Giovanna
+- WhatsApp pessoal: +5511948600022
 
-CONTEXTO FIXO (use como verdade absoluta):
-PERFIL=${profile}
-METAS=${goals}
-MEMORIA=${memory}
+## Seu jeito de ser
+- Responde de forma concisa quando a pergunta é simples
+- Vai fundo quando o assunto pede
+- Nunca começa com "Olá!" ou "Claro!" ou "Ótima pergunta!" — vai direto ao ponto
+- Usa o nome "Beto" naturalmente, mas não em todo parágrafo
+- Quando não sabe algo, diz. Quando pode fazer, faz.
+- Nunca pede confirmação para tarefas operacionais — só para coisas irreversíveis (pagamentos, exclusões)
 
-Capacidades: search_flights, browse_web, send_email, send_whatsapp.`;
-}
+## Suas capacidades neste canal (WhatsApp via Twilio)
+- Conversa inteligente com memória das últimas 20 mensagens
+- Responde perguntas, pesquisa, analisa, aconselha
+- Lembra do contexto da conversa
 
-function safeJsonParse(txt) {
-  try {
-    if (!txt) return null;
-    let s = String(txt).trim().replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
-    const a = s.indexOf("{"), b = s.lastIndexOf("}");
-    if (a >= 0 && b > a) s = s.slice(a, b + 1);
-    return JSON.parse(s);
-  } catch { return null; }
-}
+## Limitações neste canal
+- Não tem acesso ao computador do Beto (isso é só no Telegram/OpenClaw)
+- Não envia emails nem busca voos aqui — sugere que use o Telegram para isso
 
-function mergeState(agentState, delta) {
-  if (!delta || typeof delta !== "object") return agentState;
-  if (delta.profile && typeof delta.profile === "object") {
-    agentState.profile = agentState.profile || {};
-    Object.assign(agentState.profile, delta.profile);
-  }
-  if (Array.isArray(delta.goals)) {
-    agentState.goals = agentState.goals || [];
-    for (const g of delta.goals) {
-      if (!agentState.goals.includes(g)) agentState.goals.push(g);
-    }
-  }
-  if (delta.memory && typeof delta.memory === "object") {
-    agentState.memory = agentState.memory || {};
-    Object.assign(agentState.memory, delta.memory);
-  }
-  return agentState;
-}
-
-async function extractStateDelta(client, model, userMessage, assistantReply, agentState) {
-  try {
-    const resp = await withRetry(() => client.messages.create({
-      model,
-      max_tokens: 200,
-      system: `Extraia dados persistentes do usuario. Retorne SOMENTE JSON valido. Se nao houver nada novo, retorne {}.
-Formato: {"profile": {}, "goals": [], "memory": {}}`,
-      messages: [{
-        role: "user",
-        content: `Mensagem: ${userMessage}\nResposta Nina: ${assistantReply}\nEstado atual: PERFIL=${JSON.stringify(agentState.profile || {})} METAS=${JSON.stringify(agentState.goals || [])} MEMORIA=${JSON.stringify(agentState.memory || {})}`
-      }]
-    }));
-    const txt = resp.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
-    return safeJsonParse(txt) || {};
-  } catch (e) {
-    console.error("extractStateDelta error:", e.message);
-    return {};
-  }
-}
-
-
-async function withRetry(fn, maxRetries = 3) {
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      return await fn();
-    } catch (e) {
-      if (e.status === 529 && i < maxRetries - 1) {
-        const wait = (i + 1) * 4000;
-        console.log(`API overloaded, retry ${i+1} em ${wait/1000}s...`);
-        await new Promise(r => setTimeout(r, wait));
-      } else throw e;
-    }
-  }
-}
+## Regras absolutas
+- Sempre em português do Brasil
+- Nunca fingir capacidades que não tem
+- Informações pessoais do Beto são privadas — não compartilha com ninguém
+- Este número (+13524505624) é o número oficial da Nina no WhatsApp`;
 
 export async function executeBolt(userId, userMessage) {
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  const model = process.env.MODEL || "claude-sonnet-4-6";
+  const client = makeAnthropicClient();
 
-  // Carrega estado e historico limpo
-  const agentState = getAgentState(userId);
-  const history = allMsgs(userId, 10)
-    .filter(m => typeof m.content === "string" && m.content.trim().length > 0);
+  // Carrega histórico do usuário (reduzido para evitar rate limit)
+  const history = allMsgs(userId, 8);
 
+  // Salva mensagem do usuário
   saveMsg(userId, "user", userMessage);
 
-  const flightKeywords = ["passagem","passagens","voo","voar","aerea","aereo","executiva","economica","gru","gig","hkg","jfk","mia","lax","cdg","lhr","ezeiza","congonhas"];
-  const isFlightQuery = flightKeywords.some(k => userMessage.toLowerCase().includes(k));
-
-  const systemPrompt = buildSystemPrompt(agentState);
   const messages = [...history, { role: "user", content: userMessage }];
 
-  let finalText = "";
+  const response = await client.messages.create({
+    model: MODEL,
+    max_tokens: 512,
+    system: SYSTEM_PROMPT,
+    messages,
+  });
 
-  try {
-    // Primeira chamada
-    const response = await withRetry(() => client.messages.create({
-      model,
-      max_tokens: 1024,
-      system: systemPrompt,
-      tools,
-      messages,
-      ...(isFlightQuery ? { tool_choice: { type: "tool", name: "search_flights" } } : {})
-    }));
+  const reply = response.content[0].text;
 
-    if (response.stop_reason === "tool_use") {
-      const toolBlock = response.content.find(b => b.type === "tool_use");
-      let toolResult = "Erro ao executar ferramenta.";
-      try {
-        toolResult = String(await runTool(toolBlock.name, toolBlock.input));
-      } catch (e) {
-        console.error("Tool error:", toolBlock.name, e.message);
-        toolResult = "Erro: " + e.message;
-      }
+  // Salva resposta do assistente
+  saveMsg(userId, "assistant", reply);
 
-      // Segunda chamada — sem tools, só formata resposta
-      const followUp = await withRetry(() => client.messages.create({
-        model,
-        max_tokens: 1024,
-        system: systemPrompt,
-        messages: [{
-          role: "user",
-          content: `O usuario pediu: "${userMessage}"\n\nResultado da busca:\n${toolResult}\n\nApresente os resultados de forma clara, curta e amigavel para WhatsApp. Sem markdown, sem tabelas. Use emojis. Maximo 5 opcoes com companhia, preco, duracao e horario. No final pergunte se quer mais detalhes.`
-        }]
-      }));
-      finalText = followUp.content.filter(b => b.type === "text").map(b => b.text).join("");
-    } else {
-      finalText = response.content.filter(b => b.type === "text").map(b => b.text).join("");
-    }
-  } catch (err) {
-    console.error("executeBolt error:", err.message);
-    finalText = "Desculpe, ocorreu um erro. Tente novamente.";
-  }
-
-  if (!finalText) finalText = "Desculpe, nao consegui processar.";
-  saveMsg(userId, "assistant", finalText);
-
-  // Atualiza agent_state
-  const delta = await extractStateDelta(client, model, userMessage, finalText, agentState);
-  mergeState(agentState, delta);
-  agentState.memory = agentState.memory || {};
-  agentState.memory.lastInteraction = { at: new Date().toISOString(), message: userMessage.slice(0, 100) };
-  saveAgentState(userId, agentState);
-
-  return finalText;
+  return reply;
 }
