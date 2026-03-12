@@ -83,9 +83,8 @@ export async function checkAndReplyEmails() {
 }
 
 export function startEmailWatcher(intervalMinutes = 2) {
-  console.log("📧 Email watcher desativado (modo seguro)");
-  return;
   if (process.env.RAILWAY_ENVIRONMENT) {
+    console.log("📧 Email watcher desativado no Railway");
     return;
   }
   console.log(`👁 Nina monitorando emails a cada ${intervalMinutes} min...`);
