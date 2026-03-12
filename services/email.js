@@ -11,3 +11,7 @@ export async function sendEmail({ to, subject, body }) {
     html: body
   });
 }
+
+export async function processEmailRequest({ to, subject, body }) {
+  return await sendEmail({ to, subject, body });
+}
